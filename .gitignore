@@ -154,3 +154,6 @@ Thumbs.db
 
 ms_cache/
 mmdata_test/
+outputs/
+mmdata_test_1024/
+agent_output/
