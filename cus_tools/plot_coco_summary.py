@@ -16,18 +16,32 @@ import matplotlib.pyplot as plt
 import pandas as pd
 
 
+def apply_plot_style() -> None:
+    plt.rcParams.update(
+        {
+            "font.size": 14,
+            "axes.titlesize": 20,
+            "figure.titlesize": 20,
+            "axes.labelsize": 16,
+            "xtick.labelsize": 13,
+            "ytick.labelsize": 13,
+            "legend.fontsize": 13,
+        }
+    )
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Plot COCO summary charts by model name")
     parser.add_argument(
         "--csv",
         type=Path,
-        default=Path("assets/coco_summary.csv"),
+        default=Path("assets/50x_unsup_summary.csv"),
         help="Path to coco_summary.csv",
     )
     parser.add_argument(
         "--out-dir",
         type=Path,
-        default=Path("outputs/coco_eval/plots"),
+        default=Path("outputs/coco_eval_apmask/plots"),
         help="Directory to save output figures",
     )
     parser.add_argument("--split", type=str, default=None, help="Filter by split")
@@ -90,15 +104,75 @@ def plot_map_metrics(df: pd.DataFrame, out_file: Path) -> None:
         label="segm_mAP_75",
     )
 
-    ax.set_title("Segmentation AP Metrics by Model")
+    fig.suptitle("Segmentation AP Metrics by Model", y=0.97)
     ax.set_xlabel("Model")
     ax.set_ylabel("AP")
     ax.set_xticks(x)
     ax.set_xticklabels(model_labels)
     ax.grid(True, linestyle="--", alpha=0.4)
-    ax.legend()
+    handles, labels = ax.get_legend_handles_labels()
+    fig.legend(
+        handles,
+        labels,
+        loc="upper center",
+        bbox_to_anchor=(0.5, 0.935),
+        ncol=3,
+        frameon=False,
+    )
     _rotate_xticks()
-    fig.tight_layout()
+    fig.tight_layout(rect=[0, 0, 1, 0.93])
+    fig.savefig(out_file, dpi=200)
+    plt.close(fig)
+
+
+def plot_pixel_metrics(df: pd.DataFrame, out_file: Path) -> None:
+    fig, ax = plt.subplots(figsize=(16, 7))
+    x = list(range(len(df)))
+    width = 0.2
+    model_labels = _display_model_names(df["model"])
+
+    ax.bar(
+        [i - 1.5 * width for i in x],
+        df["pixel_mean_iou"],
+        width=width,
+        label="pixel_mean_iou",
+    )
+    ax.bar(
+        [i - 0.5 * width for i in x],
+        df["pixel_mean_precision"],
+        width=width,
+        label="pixel_mean_precision",
+    )
+    ax.bar(
+        [i + 0.5 * width for i in x],
+        df["pixel_mean_recall"],
+        width=width,
+        label="pixel_mean_recall",
+    )
+    ax.bar(
+        [i + 1.5 * width for i in x],
+        df["pixel_mean_f1"],
+        width=width,
+        label="pixel_mean_f1",
+    )
+
+    fig.suptitle("Pixel Metrics by Model", y=0.97)
+    ax.set_xlabel("Model")
+    ax.set_ylabel("Score")
+    ax.set_xticks(x)
+    ax.set_xticklabels(model_labels)
+    ax.grid(True, linestyle="--", alpha=0.4)
+    handles, labels = ax.get_legend_handles_labels()
+    fig.legend(
+        handles,
+        labels,
+        loc="upper center",
+        bbox_to_anchor=(0.5, 0.935),
+        ncol=4,
+        frameon=False,
+    )
+    _rotate_xticks()
+    fig.tight_layout(rect=[0, 0, 1, 0.93])
     fig.savefig(out_file, dpi=200)
     plt.close(fig)
 
@@ -188,6 +262,7 @@ def plot_memory(df: pd.DataFrame, out_file: Path, memory_col: str) -> None:
 
 def main() -> None:
     args = parse_args()
+    apply_plot_style()
 
     if not args.csv.exists():
         raise FileNotFoundError(f"CSV not found: {args.csv}")
@@ -199,6 +274,10 @@ def main() -> None:
         "coco/segm_mAP",
         "coco/segm_mAP_50",
         "coco/segm_mAP_75",
+        "pixel_mean_iou",
+        "pixel_mean_precision",
+        "pixel_mean_recall",
+        "pixel_mean_f1",
         args.time_col,
         args.memory_col,
     ]
@@ -222,11 +301,13 @@ def main() -> None:
     args.out_dir.mkdir(parents=True, exist_ok=True)
 
     plot_map_metrics(df, args.out_dir / "coco_map_metrics.png")
+    plot_pixel_metrics(df, args.out_dir / "coco_pixel_metrics.png")
     plot_time(df, args.out_dir / f"coco_{args.time_col}.png", args.time_col)
     plot_memory(df, args.out_dir / f"coco_{args.memory_col}.png", args.memory_col)
 
     print("Saved:")
     print(args.out_dir / "coco_map_metrics.png")
+    print(args.out_dir / "coco_pixel_metrics.png")
     print(args.out_dir / f"coco_{args.time_col}.png")
     print(args.out_dir / f"coco_{args.memory_col}.png")
 
