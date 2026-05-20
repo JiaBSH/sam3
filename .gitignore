@@ -153,7 +153,7 @@ Thumbs.db
 *.vocab
 
 ms_cache/
-mmdata_test/
 outputs/
-mmdata_test_1024/
+data_cus/
 agent_output/
+.runtime_cache/
