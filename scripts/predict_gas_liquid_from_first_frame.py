@@ -158,17 +158,26 @@ def list_annotation_paths(mark_dir: Path) -> list[Path]:
     return json_paths
 
 
-def read_category_name(mark_dir: Path, annotation_payload: dict[str, Any]) -> str:
-    yaml_path = mark_dir / "isat.yaml"
-    if yaml_path.is_file():
-        for line in yaml_path.read_text(encoding="utf-8").splitlines():
-            stripped = line.strip()
-            if stripped.startswith("name:"):
-                return stripped.split(":", 1)[1].strip()
+def read_default_category_name(annotation_payload: dict[str, Any]) -> str:
     objects = annotation_payload.get("objects") or []
-    if objects:
-        return str(objects[0].get("category") or "object")
+    for obj in objects:
+        category_name = str(obj.get("category") or "").strip()
+        if category_name and category_name != "__background__":
+            return category_name
     return "object"
+
+
+def build_instance_category_map(annotation_payload: dict[str, Any]) -> dict[int, str]:
+    category_by_group: dict[int, str] = {}
+    for obj in annotation_payload.get("objects") or []:
+        group_id = obj.get("group")
+        category_name = str(obj.get("category") or "").strip()
+        if not isinstance(group_id, int) or group_id <= 0:
+            continue
+        if not category_name or category_name == "__background__":
+            continue
+        category_by_group[group_id] = category_name
+    return category_by_group
 
 
 def normalize_polygon(segmentation: Any) -> list[np.ndarray]:
@@ -268,7 +277,8 @@ def propagate_group(
     annotation_paths = list_annotation_paths(mark_dir)
 
     first_annotation = load_json(annotation_paths[0])
-    category_name = category_name_override or read_category_name(mark_dir, first_annotation)
+    category_name = category_name_override or read_default_category_name(first_annotation)
+    instance_category_map = build_instance_category_map(first_annotation)
     first_frame_masks = annotation_to_instance_masks(first_annotation)
 
     output_group_dir = output_root / group_dir.name
@@ -340,6 +350,10 @@ def propagate_group(
                 category_name=category_name,
                 scores=[instance_scores[int(instance_id)] for instance_id in per_frame_masks],
                 instance_ids=[int(instance_id) for instance_id in per_frame_masks],
+                instance_categories=[
+                    instance_category_map.get(int(instance_id), category_name)
+                    for instance_id in per_frame_masks
+                ],
                 min_area=min_area,
                 score_threshold=score_threshold,
             )

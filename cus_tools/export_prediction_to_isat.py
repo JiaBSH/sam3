@@ -71,6 +71,7 @@ def _build_isat_payload(
     score_threshold: float,
     min_area: float,
     instance_ids: list[int] | None = None,
+    instance_categories: list[str] | None = None,
 ) -> dict[str, Any]:
     img_path = Path(image_path)
     h = int(masks.shape[1])
@@ -82,12 +83,18 @@ def _build_isat_payload(
         resolved_instance_ids = [mask_idx + 1 for mask_idx in range(int(masks.shape[0]))]
     else:
         resolved_instance_ids = [int(instance_id) for instance_id in instance_ids]
+    if instance_categories is None:
+        resolved_instance_categories = [category_name for _ in range(int(masks.shape[0]))]
+    else:
+        resolved_instance_categories = [str(instance_category) for instance_category in instance_categories]
 
     for mask_idx, (mask_bool, score, instance_id) in enumerate(
         zip(masks, scores, resolved_instance_ids)
     ):
         if float(score) < score_threshold:
             continue
+
+        instance_category = resolved_instance_categories[mask_idx]
 
         polygons = _mask_to_polygons(mask_bool)
         for poly in polygons:
@@ -96,7 +103,7 @@ def _build_isat_payload(
                 continue
             objects.append(
                 {
-                    "category": category_name,
+                    "category": instance_category,
                     "group": int(instance_id),
                     "segmentation": poly,
                     "area": area,
@@ -145,6 +152,7 @@ def save_inference_as_isat(
         score_threshold=float(score_threshold),
         min_area=float(min_area),
         instance_ids=None,
+        instance_categories=None,
     )
 
     output_path = Path(output_json_path)
@@ -161,6 +169,7 @@ def save_masks_as_isat(
     score_threshold: float = 0.5,
     min_area: float = 20.0,
     instance_ids: list[int] | None = None,
+    instance_categories: list[str] | None = None,
 ) -> Path:
     masks = np.asarray(instance_masks, dtype=bool)
     if masks.ndim == 2:
@@ -179,6 +188,7 @@ def save_masks_as_isat(
         score_threshold=float(score_threshold),
         min_area=float(min_area),
         instance_ids=instance_ids,
+        instance_categories=instance_categories,
     )
 
     output_path = Path(output_json_path)
@@ -225,6 +235,7 @@ def convert_prediction_json_to_isat(
         score_threshold=float(score_threshold),
         min_area=float(min_area),
         instance_ids=None,
+        instance_categories=None,
     )
 
     if output_json_path is None:
