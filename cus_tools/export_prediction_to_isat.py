@@ -70,6 +70,7 @@ def _build_isat_payload(
     category_name: str,
     score_threshold: float,
     min_area: float,
+    instance_ids: list[int] | None = None,
 ) -> dict[str, Any]:
     img_path = Path(image_path)
     h = int(masks.shape[1])
@@ -77,8 +78,14 @@ def _build_isat_payload(
 
     objects: list[dict[str, Any]] = []
     layer_idx = 1
+    if instance_ids is None:
+        resolved_instance_ids = [mask_idx + 1 for mask_idx in range(int(masks.shape[0]))]
+    else:
+        resolved_instance_ids = [int(instance_id) for instance_id in instance_ids]
 
-    for mask_idx, (mask_bool, score) in enumerate(zip(masks, scores)):
+    for mask_idx, (mask_bool, score, instance_id) in enumerate(
+        zip(masks, scores, resolved_instance_ids)
+    ):
         if float(score) < score_threshold:
             continue
 
@@ -90,13 +97,13 @@ def _build_isat_payload(
             objects.append(
                 {
                     "category": category_name,
-                    "group": 1,
+                    "group": int(instance_id),
                     "segmentation": poly,
                     "area": area,
                     "layer": float(layer_idx),
                     "bbox": _polygon_bbox(poly),
                     "iscrowd": False,
-                    "note": f"score={float(score):.4f},mask_id={mask_idx}",
+                    "note": f"score={float(score):.4f},mask_id={mask_idx},instance_id={instance_id}",
                 }
             )
             layer_idx += 1
@@ -137,6 +144,41 @@ def save_inference_as_isat(
         category_name=category_name,
         score_threshold=float(score_threshold),
         min_area=float(min_area),
+        instance_ids=None,
+    )
+
+    output_path = Path(output_json_path)
+    _write_json(output_path, payload)
+    return output_path
+
+
+def save_masks_as_isat(
+    image_path: str | Path,
+    instance_masks: list[np.ndarray] | np.ndarray,
+    output_json_path: str | Path,
+    category_name: str = "畴区",
+    scores: list[float] | None = None,
+    score_threshold: float = 0.5,
+    min_area: float = 20.0,
+    instance_ids: list[int] | None = None,
+) -> Path:
+    masks = np.asarray(instance_masks, dtype=bool)
+    if masks.ndim == 2:
+        masks = masks[None, ...]
+
+    if scores is None:
+        score_list = [1.0] * int(masks.shape[0])
+    else:
+        score_list = [float(score) for score in scores]
+
+    payload = _build_isat_payload(
+        image_path=image_path,
+        masks=masks,
+        scores=score_list,
+        category_name=category_name,
+        score_threshold=float(score_threshold),
+        min_area=float(min_area),
+        instance_ids=instance_ids,
     )
 
     output_path = Path(output_json_path)
@@ -182,6 +224,7 @@ def convert_prediction_json_to_isat(
         category_name=category_name,
         score_threshold=float(score_threshold),
         min_area=float(min_area),
+        instance_ids=None,
     )
 
     if output_json_path is None:
